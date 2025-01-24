@@ -140,7 +140,8 @@ class reactive_follow_gap:
         best_point = int((end+start)/2)
 
         #Publish Drive message
-        velocity = min(proc_ranges[best_point]/2, 7) 
+        velocity = min(proc_ranges[best_point]/2 * 1.5, 7) 
+        velocity = max(velocity, 3)
         angle = angle_min + incr * (best_point + indice_inf)
 
         drive_msg = AckermannDriveStamped()

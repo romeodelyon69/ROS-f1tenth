@@ -15,9 +15,9 @@ import csv
 # TODO: import ROS msg types and libraries
 
 p = 0.5
-max_velocity = 2
+max_velocity = 6
 
-file_path = '/home/romeonzt/rcws/logs/wp-2025-01-17-14-29-31.csv'
+file_path = '/home/romeo/rcws/logs/wp-2025-01-17-23-01-38.csv'
 
 class PurePursuit(object):
     """
@@ -46,6 +46,8 @@ class PurePursuit(object):
         self.L = 1
         self.waypoint = []
         self.waypoint = self.parse_waypoint(file_path)
+
+        self.orientation = 0
         
 
         
@@ -67,12 +69,16 @@ class PurePursuit(object):
                     waypoints.append(point)
                 else:
                     lastPoint = waypoints[-1]
-                    if(self.dist(lastPoint, point) > self.L):
+                    if(self.dist(lastPoint, point) > self.L/2):
                         waypoints.append(point)
         return waypoints
     
     def pose_callback(self, pose_msg):
-        t = time.time()
+        carPose = pose_msg.pose.pose
+
+        quaternion = np.array([carPose.orientation.x, carPose.orientation.y, carPose.orientation.z,carPose.orientation.w]) 
+        angles = euler_from_quaternion(quaternion)
+        self.orientation = angles[2]
 
         rospy.loginfo_throttle(0.5, "position de la voiture :" + str(pose_msg.pose.pose.position.x) + str(pose_msg.pose.pose.position.y))
 
@@ -80,8 +86,6 @@ class PurePursuit(object):
         # TODO: find the current waypoint to track using methods mentioned in lecture
         waypoint = self.find_waypoint(pose_msg.pose.pose)
         
-        carPose = pose_msg.pose.pose
-
         # TODO: transform goal point to vehicle frame of reference
         goal = Point()
 
@@ -105,7 +109,7 @@ class PurePursuit(object):
         if(abs(steering_angle) > 0.4189):
             steering_angle = steering_angle/abs(steering_angle) * 0.4189
 
-        velocity = max_velocity * np.cos(steering_angle)
+        velocity = max_velocity * np.cos(steering_angle*2)**2
 
         
         # TODO: publish drive message, don't forget to limit the steering angle between -0.4189 and 0.4189 radians
@@ -138,8 +142,6 @@ class PurePursuit(object):
         marker.color.g = 0.0
         marker.color.b = 0.0
         self.marker_pub.publish(marker)
-
-        print(t - time.time())
         
         
 
@@ -169,10 +171,7 @@ class PurePursuit(object):
 
     def isAhead(self, point, carPose):
         
-        quaternion = np.array([carPose.orientation.x, carPose.orientation.y, carPose.orientation.z,carPose.orientation.w])
-        
-        angles = euler_from_quaternion(quaternion)
-        directionAngle = angles[2]
+        directionAngle = self.orientation
 
         directionVectorX = -math.sin(directionAngle)
         directionVectorY = math.cos(directionAngle)
@@ -197,6 +196,7 @@ class PurePursuit(object):
         wayPoint1 = None
 
         for waypoint in self.waypoint:
+            
             if(self.isAhead(waypoint, pose)):
                 
                 d = self.dist(pose.position, waypoint)

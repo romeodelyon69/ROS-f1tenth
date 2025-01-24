@@ -3,6 +3,10 @@ from __future__ import print_function
 import sys
 import math
 import numpy as np
+import csv
+from time import gmtime, strftime, time
+from os.path import expanduser
+import atexit
 
 #ROS Imports
 import rospy
@@ -24,11 +28,23 @@ integral = 0.0
 ANGLE_RANGE = 270 # Hokuyo 10LX has 270 degrees scan
 #DESIRED_DISTANCE_RIGHT = 0.8 # meters
 #DESIRED_DISTANCE_LEFT = 0.8
-VELOCITY = 1 # meters per second
+VELOCITY = 5 # meters per second
 CAR_LENGTH = 0.50 # Traxxas Rally is 20 inches or 0.5 meters
 PI = 3.14159
 
-realCar = True
+realCar = False
+
+home = expanduser('~')
+fichier_csv = strftime(home+'/rcws/logs/lidarAndActions-%Y-%m-%d-%H-%M-%S',gmtime())+'.csv'
+fichier =  open(fichier_csv, mode='w', newline="") 
+writer = csv.writer(fichier)
+
+t = time()
+
+
+def shutdown():
+    fichier.close()
+    print('Goodbye')
 
 class WallFollow:
     """ Implement Wall Following on the car
@@ -79,7 +95,7 @@ class WallFollow:
         else:
              velocity = 0.5'''
 
-        velocity = velocity / (1 + (abs(angle) / 5))
+        velocity = velocity / (1 + (abs(angle) ))
 
         prev_error = error
         integral += error 
@@ -91,6 +107,8 @@ class WallFollow:
         drive_msg.drive.steering_angle = angle
         drive_msg.drive.speed = velocity
         self.drive_pub.publish(drive_msg)
+
+        return velocity, angle
 
     def followRight(self, theta, leftDist):
         #Follow left wall as per the algorithm 
@@ -126,7 +144,6 @@ class WallFollow:
         widthTrack = (data.ranges[indice_angle0] + data.ranges[indice_angle180])
 
         
-        
         rightDist = [self.getRange(data, theta + angleX), self.getRange(data, angleX)]
         errorRight = self.followRight(theta, rightDist) #TODO: replace with error returned by followLeft
 
@@ -141,10 +158,19 @@ class WallFollow:
         #send error to pid_control
         if(abs(errorRight) < abs(errorLeft)):
             #print("LEFTTT")
-            self.pid_control(-errorLeft, VELOCITY)
+            velocity, steeringAngle = self.pid_control(-errorLeft, VELOCITY)
         else:
             #print("RIGHTTTTT")
-            self.pid_control(errorRight, VELOCITY)
+            velocity, steeringAngle = self.pid_control(errorRight, VELOCITY)
+        
+        global t 
+
+        if(time()-t > 0.05):
+            dataFront = data.ranges[indice_angle0 : indice_angle180+1]
+            step = int(len(dataFront)/20)
+            writer.writerow([velocity, steeringAngle, dataFront[::step]])
+            
+            t = time()
 
 def main(args):
     rospy.init_node("WallFollow_node", anonymous=True)
@@ -153,4 +179,5 @@ def main(args):
     rospy.spin()
 
 if __name__=='__main__':
-	main(sys.argv)
+    atexit.register(shutdown)
+    main(sys.argv)
