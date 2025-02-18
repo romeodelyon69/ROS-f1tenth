@@ -15,9 +15,10 @@ from ackermann_msgs.msg import AckermannDriveStamped, AckermannDrive
 
 
 #PID CONTROL PARAMS
-kp = 2
-kd = 4
-ki = 0
+kp = 1
+kd = 0.0005
+ki = 0.
+
 
 servo_offset = 0.0
 prev_error = 0.0 
@@ -28,7 +29,7 @@ integral = 0.0
 ANGLE_RANGE = 270 # Hokuyo 10LX has 270 degrees scan
 #DESIRED_DISTANCE_RIGHT = 0.8 # meters
 #DESIRED_DISTANCE_LEFT = 0.8
-VELOCITY = 5 # meters per second
+VELOCITY = 7 # meters per second
 CAR_LENGTH = 0.50 # Traxxas Rally is 20 inches or 0.5 meters
 PI = 3.14159
 
@@ -65,6 +66,8 @@ class WallFollow:
         self.DESIRED_DISTANCE_RIGHT = 0.8 # meters
         self.DESIRED_DISTANCE_LEFT = 0.8
 
+        self.time = time()
+
     def getRange(self, data, angle):
         # data: single message from topic /scan
         # angle: between -45 to 225 degrees, where 0 degrees is directly to the right
@@ -85,17 +88,12 @@ class WallFollow:
         global ki
         global kd
         angle = 0.0
+        dt = time() - self.time
         #TODO: Use kp, ki & kd to implement a PID controller for 
-        angle = kp * error + ki * integral - kd *(error - prev_error)
+        angle = kp * error + ki * integral * dt - kd *(error - prev_error) / dt
 
-        '''if(angle < 10 and angle > 0):
-             velocity = 1.5
-        elif(angle < 20 and angle > 10):
-             velocity = 1
-        else:
-             velocity = 0.5'''
-
-        velocity = velocity / (1 + (abs(angle) ))
+        velocity = velocity / (1 + (abs(angle)))
+        #velocity = velocity * math.cos(angle)**3
 
         prev_error = error
         integral += error 
@@ -107,6 +105,7 @@ class WallFollow:
         drive_msg.drive.steering_angle = angle
         drive_msg.drive.speed = velocity
         self.drive_pub.publish(drive_msg)
+        self.time = time()
 
         return velocity, angle
 
